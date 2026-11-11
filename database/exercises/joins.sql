@@ -30,7 +30,7 @@ WHERE a.currency = 'USD';
 --- Return all users and show which has USD accounts 
 SELECT u.name, a.id
 FROM users u
-LEFT JOIN accounts a ON a.user_id = u.id AND a.currency = 'USD'
+LEFT JOIN accounts a ON a.user_id = u.id AND a.currency = 'USD';
 
 -- Return users without accounts
 -- (anti-join via LEFT JOIN; NOT EXISTS variant in subqueries.sql)

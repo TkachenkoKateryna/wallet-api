@@ -17,6 +17,22 @@ describe('keyset cursor', () => {
       'a bad timestamp',
       encodeCursor({ ...cursor, createdAt: '2026-08-15; DROP TABLE x' }),
     ],
+    [
+      'an impossible month',
+      encodeCursor({ ...cursor, createdAt: '2026-99-15 10:00:00+00' }),
+    ],
+    [
+      'an impossible day',
+      encodeCursor({ ...cursor, createdAt: '2026-02-31 10:00:00+00' }),
+    ],
+    [
+      'an impossible hour',
+      encodeCursor({ ...cursor, createdAt: '2026-08-15 25:00:00+00' }),
+    ],
+    [
+      'an impossible offset',
+      encodeCursor({ ...cursor, createdAt: '2026-08-15 10:00:00+99' }),
+    ],
     ['a bad id', encodeCursor({ ...cursor, id: '42' })],
     ['missing fields', Buffer.from('{}').toString('base64url')],
   ])('rejects %s', (_label, value) => {
