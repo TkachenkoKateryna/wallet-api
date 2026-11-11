@@ -55,5 +55,11 @@ jobs:
       - name: Run migrations
         run: npm run migrate:up
 
+      # Some e2e tests read seeded rows (settlement accounts, funded wallets).
+      - name: Seed database
+        run: npm run seed:dev
+        env:
+          ALLOW_DB_RESET: true
+
       - name: E2E tests
         run: npm run test:e2e
