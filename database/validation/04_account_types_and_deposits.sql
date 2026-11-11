@@ -25,16 +25,16 @@ EXCEPTION
 END
 $$;
 
--- Test fixtures. IDs: e0000000-0000-0000-0000-0000000000NN
+-- Test fixtures. IDs: e0000000-0000-4000-8000-0000000000NN
 INSERT INTO users (id, email, name) VALUES
-    ('e0000000-0000-0000-0000-000000000001', 'schema-check@example.com', 'Schema Check');
+    ('e0000000-0000-4000-8000-000000000001', 'schema-check@example.com', 'Schema Check');
 
 INSERT INTO accounts (id, user_id, account_type, currency) VALUES
-    ('e0000000-0000-0000-0000-000000000002', 'e0000000-0000-0000-0000-000000000001', 'wallet', 'USD');
+    ('e0000000-0000-4000-8000-000000000002', 'e0000000-0000-4000-8000-000000000001', 'wallet', 'USD');
 
 INSERT INTO financial_operations (id, type, idempotency_key) VALUES
-    ('e0000000-0000-0000-0000-000000000003', 'deposit',  'schema-check-deposit'),
-    ('e0000000-0000-0000-0000-000000000004', 'transfer', 'schema-check-transfer');
+    ('e0000000-0000-4000-8000-000000000003', 'deposit',  'schema-check-deposit'),
+    ('e0000000-0000-4000-8000-000000000004', 'transfer', 'schema-check-transfer');
 
 
 -- =========================================
@@ -82,13 +82,13 @@ BEGIN
     PERFORM pg_temp.expect_violation(
         'system account requires user_id = NULL',
         $sql$INSERT INTO accounts (account_type, user_id, system_code, currency)
-             VALUES ('system', 'e0000000-0000-0000-0000-000000000001', 'settlement', 'EUR')$sql$,
+             VALUES ('system', 'e0000000-0000-4000-8000-000000000001', 'settlement', 'EUR')$sql$,
         'chk_accounts_ownership');
 
     PERFORM pg_temp.expect_violation(
         'unsupported account type is rejected',
         $sql$INSERT INTO accounts (account_type, user_id, currency)
-             VALUES ('savings', 'e0000000-0000-0000-0000-000000000001', 'EUR')$sql$,
+             VALUES ('savings', 'e0000000-0000-4000-8000-000000000001', 'EUR')$sql$,
         'chk_accounts_account_type');
 
     PERFORM pg_temp.expect_violation(
@@ -99,7 +99,7 @@ BEGIN
     PERFORM pg_temp.expect_violation(
         'wallet account cannot have a system_code',
         $sql$INSERT INTO accounts (account_type, user_id, system_code, currency)
-             VALUES ('wallet', 'e0000000-0000-0000-0000-000000000001', 'settlement', 'EUR')$sql$,
+             VALUES ('wallet', 'e0000000-0000-4000-8000-000000000001', 'settlement', 'EUR')$sql$,
         'chk_accounts_system_code');
 
     PERFORM pg_temp.expect_violation(
@@ -129,9 +129,9 @@ BEGIN
 
     -- Same statement as database/seeds/development/02_accounts.sql
     INSERT INTO accounts (id, user_id, account_type, system_code, currency, status) VALUES
-        ('b0000000-0000-0000-0000-000000000001', NULL, 'system', 'settlement', 'USD', 'active'),
-        ('b0000000-0000-0000-0000-000000000002', NULL, 'system', 'settlement', 'EUR', 'active'),
-        ('b0000000-0000-0000-0000-000000000003', NULL, 'system', 'settlement', 'UAH', 'active')
+        ('b0000000-0000-4000-8000-000000000001', NULL, 'system', 'settlement', 'USD', 'active'),
+        ('b0000000-0000-4000-8000-000000000002', NULL, 'system', 'settlement', 'EUR', 'active'),
+        ('b0000000-0000-4000-8000-000000000003', NULL, 'system', 'settlement', 'UAH', 'active')
     ON CONFLICT (system_code, currency) DO NOTHING;
 
     GET DIAGNOSTICS inserted = ROW_COUNT;
@@ -158,23 +158,23 @@ BEGIN
     PERFORM pg_temp.expect_violation(
         'deposit requires an existing operation',
         $sql$INSERT INTO deposits (operation_id, account_id, amount)
-             VALUES (gen_random_uuid(), 'e0000000-0000-0000-0000-000000000002', 10)$sql$,
+             VALUES (gen_random_uuid(), 'e0000000-0000-4000-8000-000000000002', 10)$sql$,
         'deposits_operation_id_fkey');
 
     PERFORM pg_temp.expect_violation(
         'deposit requires an existing account',
         $sql$INSERT INTO deposits (operation_id, account_id, amount)
-             VALUES ('e0000000-0000-0000-0000-000000000003', gen_random_uuid(), 10)$sql$,
+             VALUES ('e0000000-0000-4000-8000-000000000003', gen_random_uuid(), 10)$sql$,
         'deposits_account_id_fkey');
 
     PERFORM pg_temp.expect_violation(
         'deposit amount must be positive',
         $sql$INSERT INTO deposits (operation_id, account_id, amount)
-             VALUES ('e0000000-0000-0000-0000-000000000003', 'e0000000-0000-0000-0000-000000000002', 0)$sql$,
+             VALUES ('e0000000-0000-4000-8000-000000000003', 'e0000000-0000-4000-8000-000000000002', 0)$sql$,
         'deposits_amount_check');
 
     INSERT INTO deposits (operation_id, account_id, amount, provider_reference)
-    VALUES ('e0000000-0000-0000-0000-000000000003', 'e0000000-0000-0000-0000-000000000002', 10, 'SCHEMA-CHECK');
+    VALUES ('e0000000-0000-4000-8000-000000000003', 'e0000000-0000-4000-8000-000000000002', 10, 'SCHEMA-CHECK');
 
     RAISE NOTICE 'ok: valid deposit is accepted';
 END
@@ -190,7 +190,7 @@ BEGIN
     PERFORM pg_temp.expect_violation(
         'transfer requires an existing source account',
         $sql$INSERT INTO transfers (operation_id, source_account_id, destination_account_id, amount)
-             VALUES ('e0000000-0000-0000-0000-000000000004', gen_random_uuid(), 'e0000000-0000-0000-0000-000000000002', 10)$sql$,
+             VALUES ('e0000000-0000-4000-8000-000000000004', gen_random_uuid(), 'e0000000-0000-4000-8000-000000000002', 10)$sql$,
         'transfers_source_account_id_fkey');
 
     PERFORM pg_temp.expect_violation(
@@ -201,7 +201,7 @@ BEGIN
 
     PERFORM pg_temp.expect_violation(
         'user with accounts cannot be deleted',
-        $sql$DELETE FROM users WHERE id = 'e0000000-0000-0000-0000-000000000001'$sql$,
+        $sql$DELETE FROM users WHERE id = 'e0000000-0000-4000-8000-000000000001'$sql$,
         'accounts_user_id_fkey');
 END
 $$;
@@ -284,7 +284,7 @@ BEGIN
     LEFT JOIN withdrawals w ON w.operation_id = fo.id
     LEFT JOIN refunds r ON r.operation_id = fo.id
     LEFT JOIN deposits d ON d.operation_id = fo.id
-    WHERE fo.id NOT IN ('e0000000-0000-0000-0000-000000000004')  -- fixture without a subtype
+    WHERE fo.id NOT IN ('e0000000-0000-4000-8000-000000000004')  -- fixture without a subtype
       AND (
           (t.operation_id IS NOT NULL)::INT + (w.operation_id IS NOT NULL)::INT
           + (r.operation_id IS NOT NULL)::INT + (d.operation_id IS NOT NULL)::INT <> 1
