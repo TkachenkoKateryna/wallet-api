@@ -18,7 +18,7 @@
     "migrate:create": "node-pg-migrate create -m database/migrations -j sql --migration-filename-format index",
     "migrate:up": "node-pg-migrate up -m database/migrations --envPath .env",
     "migrate:down": "node-pg-migrate down -m database/migrations --envPath .env",
-    "seed:dev": "node database/seeds/seed.ts development"
+    "seed:dev": "node --env-file-if-exists=.env database/seeds/seed.ts development"
   },
   "dependencies": {
     "@nestjs/common": "^12.0.1",

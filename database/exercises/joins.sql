@@ -1,95 +1,56 @@
- -- Return every user together with all their present accounts.
-SELECT 
-    u.id AS user_id, 
-    u.email, 
-    a.id AS account_id, 
+-- Return every user together with all their present accounts.
+SELECT
+    u.id AS user_id,
+    u.email,
+    a.id AS account_id,
     a.currency,
     a.created_at AS account_creation_date
 FROM users u
-INNER JOIN accounts a 
+INNER JOIN accounts a
 ON a.user_id = u.id
 ORDER BY u.email ASC, a.created_at ASC;
 
 -- Return users including those without accounts
-SELECT 
-    u.id AS user_id, 
-    u.email, 
-    a.id AS account_id, 
+SELECT
+    u.id AS user_id,
+    u.email,
+    a.id AS account_id,
     a.currency
 FROM users u
-LEFT JOIN accounts a 
+LEFT JOIN accounts a
 ON a.user_id = u.id
 ORDER BY u.id ASC, a.id ASC;
 
--- Return users without accounts 
-SELECT 
-    u.id AS user_id, 
-    u.email, 
-    a.id AS account_id, 
+-- Return only users who have USD wallet
+SELECT u.name, a.id
 FROM users u
-LEFT JOIN accounts a 
-ON a.user_id = u.id 
-WHERE a.id = NULL
-ORDER BY u.id ASC;
+LEFT JOIN accounts a ON a.user_id = u.id
+WHERE a.currency = 'USD'; 
 
-SELECT u.id, u.email
+--- Return all users and show which has USD accounts 
+SELECT u.name, a.id
 FROM users u
-WHERE NOT EXISTS (
-    SELECT 1
-    FROM accounts a
-    WHERE a.user_id = u.id
-);
+LEFT JOIN accounts a ON a.user_id = u.id AND a.currency = 'USD';
 
--- Calculate the current balance of every account.
-
-/*
- * TODO: Optimize balance calculation for large datasets.
- * - Store current balances in a separate account_balances table.
- * - Update balances and ledger entries atomically in one transaction.
- * - Keep immutable ledger entries as the source of truth.
- * - Use stored balances for fast lookups instead of SUM().
- */
-SELECT
-    a.id AS account_id,
-    a.currency,
-    COALESCE(SUM(le.amount), 0) AS balance
-FROM accounts a
-LEFT JOIN ledger_entries le
-    ON a.id = le.account_id
-GROUP BY a.id
-ORDER BY a.id;
- 
-
--- Return user portfolio
+-- Return users without accounts
+-- (anti-join via LEFT JOIN; NOT EXISTS variant in subqueries.sql)
 SELECT
     u.id AS user_id,
-    u.email,
-    COUNT(a.id) AS account_count,
-    COUNT(DISTINCT a.currency) AS currency_count
+    u.email
 FROM users u
 LEFT JOIN accounts a
-    ON a.user_id = u.id
-GROUP BY u.id
-ORDER BY u.id;
+ON a.user_id = u.id
+WHERE a.id IS NULL
+ORDER BY u.id ASC;
 
-WITH account_stats AS (
-    SELECT
-        user_id,
-        COUNT(*) AS account_count,
-        COUNT(DISTINCT currency) AS currency_count
-    FROM accounts
-    GROUP BY user_id
-)
-SELECT
-    u.id AS user_id,
-    u.email,
-    COALESCE(s.account_count, 0) AS account_count,
-    COALESCE(s.currency_count, 0) AS currency_count
-FROM users u
-LEFT JOIN account_stats s
-    ON s.user_id = u.id;
+-- List all posted transfers with their amount, source wallet and destination wallet.
+SELECT fo.id, t.amount, t.source_account_id, t.destination_account_id
+FROM financial_operations fo
+JOIN transfers t ON t.operation_id = fo.id
+WHERE fo.status = 'posted';
 
 -- Return posted transfers with human-readable account information
+-- (correlated-subquery variant in subqueries.sql)
 SELECT
     t.operation_id AS transfer_id,
     t.source_account_id,
@@ -109,48 +70,8 @@ INNER JOIN accounts dest
 WHERE fo.status = 'posted'
 ORDER BY fo.created_at DESC;
 
-SELECT
-    t.operation_id AS transfer_id,
-    t.source_account_id,
-    (
-        SELECT a.currency
-        FROM accounts a
-        WHERE a.id = t.source_account_id
-    ) AS source_currency,
-    t.destination_account_id,
-    (
-        SELECT a.currency
-        FROM accounts a
-        WHERE a.id = t.destination_account_id
-    ) AS destination_currency,
-    t.amount,
-    fo.created_at,
-	fo.status
-FROM transfers t
-JOIN financial_operations fo
-    ON t.operation_id = fo.id
-WHERE fo.status = 'posted'
-ORDER BY fo.created_at DESC;
-
-/*
- * Correlated Subqueries vs JOINs
- *
- * - Correlated subqueries may execute once per outer row.
- * - JOINs give PostgreSQL more flexibility in choosing execution strategies.
- * - Neither approach is inherently faster.
- *
- * EXPLAIN ANALYZE results:
- * - Subqueries: 2 × 16 indexed account lookups.
- * - JOINs: Same 32 lookups using nested-loop joins.
- * - Nearly identical execution time and buffer usage.
- *
- * Best practice:
- * Prefer JOINs for related entity retrieval: clearer relationships,
- * easier extensibility, and greater optimization flexibility.
- * Always verify performance with EXPLAIN ANALYZE.
- */
-
 -- Find accounts that have never had a ledger entry.
+-- (anti-join via LEFT JOIN; NOT EXISTS variant in subqueries.sql)
 SELECT
     a.id AS account_id,
     a.user_id,
@@ -162,15 +83,52 @@ LEFT JOIN ledger_entries le
 WHERE le.account_id IS NULL
 ORDER BY a.created_at DESC;
 
-SELECT
-    a.id AS account_id,
-    a.user_id,
-    a.currency,
-    a.created_at
+-- List all operations of every type and status with their amount taken from the matching subtype table.
+SELECT fo.id, fo.type, fo.status,
+       COALESCE(t.amount, d.amount, w.amount, r.amount) AS amount
+FROM financial_operations fo
+LEFT JOIN transfers   t ON t.operation_id = fo.id
+LEFT JOIN deposits    d ON d.operation_id = fo.id
+LEFT JOIN withdrawals w ON w.operation_id = fo.id
+LEFT JOIN refunds     r ON r.operation_id = fo.id;
+
+-- List all transfers with their amount, sender name and receiver name.
+SELECT t.operation_id, t.amount,
+       su.name AS sender, du.name AS receiver
+FROM transfers t
+JOIN accounts src ON src.id = t.source_account_id
+JOIN users    su  ON su.id  = src.user_id
+JOIN accounts dst ON dst.id = t.destination_account_id
+JOIN users    du  ON du.id  = dst.user_id;
+
+-- Show each settlement account with its balance (always ≤ 0: minus the money customers hold in that currency).
+SELECT a.currency,
+       a.system_code,
+       COALESCE(SUM(le.amount), 0) AS balance
 FROM accounts a
-WHERE NOT EXISTS (
-    SELECT 1
-    FROM ledger_entries le
-    WHERE le.account_id = a.id
-)
-ORDER BY a.created_at DESC;
+LEFT JOIN ledger_entries le ON le.account_id = a.id
+WHERE a.account_type = 'system'
+  AND a.system_code  = 'settlement'
+GROUP BY a.id, a.currency, a.system_code
+ORDER BY a.currency;
+
+
+-- For one wallet, list each ledger entry with its operation type and status, newest first.
+SELECT le.id          AS entry_id,
+       le.created_at,
+       le.amount,
+       fo.id          AS operation_id,
+       fo.type        AS operation_type,
+       fo.status      AS operation_status
+FROM ledger_entries le
+JOIN ledger_transactions lt  ON lt.id = le.ledger_transaction_id
+JOIN financial_operations fo ON fo.id = lt.operation_id
+WHERE le.account_id = (
+        SELECT a.id
+        FROM accounts a
+        JOIN users u ON u.id = a.user_id
+        WHERE u.name = 'Olena Kovalenko'
+          AND a.currency = 'USD'
+          AND a.account_type = 'wallet'
+      )
+ORDER BY le.created_at DESC, le.id DESC;

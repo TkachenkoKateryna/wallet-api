@@ -12,7 +12,6 @@ HAVING COUNT(le.id) < 2
 OR COALESCE(SUM(le.amount), 0) <> 0;
 
 -- Expected result: zero rows.
-
 SELECT lt.id AS  ledger_transaction_id,
     a.currency,
     COUNT(le.id) AS entry_count,

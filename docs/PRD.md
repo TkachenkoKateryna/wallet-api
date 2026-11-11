@@ -12,7 +12,7 @@ Wallet API is a side project: a backend for multi-currency digital wallets, buil
 
 There are **no external integrations**. A deposit or withdrawal is an API call that records money entering or leaving the system; nothing is charged or paid out anywhere. All money movements are recorded in an append-only, double-entry ledger, so every balance can be reconstructed and audited.
 
-API clients act on behalf of customers. Routes under `/admin` are for admin actions. There is no authentication: `/admin` is a naming convention only.
+API clients act on behalf of customers. There is no real authentication: customer routes identify the caller by an `X-User-Id` header (simulated auth, to be replaced by real authentication later), and only return that user's own resources. Routes under `/admin` are for admin actions; `/admin` is a naming convention only and is not protected.
 
 The service is built with NestJS, PostgreSQL and raw SQL (`pg`).
 
@@ -35,7 +35,7 @@ Plus one API goal:
 ### Non-Goals
 
 - Any external integration: payment providers, banks, cards, email or SMS.
-- Authentication and authorization.
+- Real authentication and authorization (login, tokens, roles). The `X-User-Id` header stands in for them.
 - Foreign exchange between currencies.
 - A full general ledger, chart of accounts or regulatory reporting.
 - KYC/AML checks and fraud detection.
@@ -281,7 +281,8 @@ Errors use one JSON shape:
 | HTTP | Code | When |
 |---|---|---|
 | 400 | `VALIDATION_ERROR` | Malformed body, ID, amount or missing idempotency key |
-| 404 | `NOT_FOUND` | Unknown user, wallet, bank account or operation (including system account IDs) |
+| 401 | `UNAUTHORIZED` | Missing or malformed `X-User-Id`, or no user with that id |
+| 404 | `NOT_FOUND` | Unknown user, wallet, bank account or operation, including system accounts and resources owned by another user (never 403, so ids can't be probed) |
 | 409 | `EMAIL_TAKEN` | Duplicate email |
 | 409 | `WALLET_EXISTS` | Second wallet in the same currency |
 | 409 | `DUPLICATE_REFERENCE` | Withdrawal reference already used |
@@ -313,24 +314,26 @@ Database constraint violations must be translated to these errors. Raw database 
 
 ## 9. API Surface (proposed)
 
-Indicative routes; the final shape is decided during implementation.
+Customer routes act on the caller from `X-User-Id`. Routes marked ✓ are implemented; the rest are indicative.
 
 | Method | Route | FR |
 |---|---|---|
-| `POST` | `/users` | FR-USR-01 |
-| `GET` | `/users`, `/users/:id` | FR-USR-03, 04 |
-| `POST` | `/users/:userId/wallets` | FR-WAL-01 |
-| `GET` | `/users/:userId/wallets` | FR-WAL-04 |
-| `GET` | `/wallets/:id` | FR-WAL-03 |
-| `GET` | `/wallets/:id/statement` | FR-HIS-02 |
-| `GET` | `/wallets/:id/operations` | FR-HIS-03 |
-| `POST` | `/users/:userId/bank-accounts` | FR-BNK-01 |
-| `GET` | `/users/:userId/bank-accounts` | FR-BNK-02 |
+| `POST` | `/users` ✓ | FR-USR-01 |
+| `GET` | `/users`, `/users/:id` ✓ | FR-USR-03, 04 |
+| `POST` | `/accounts` ✓ | FR-WAL-01 |
+| `GET` | `/accounts` ✓ | FR-WAL-04 |
+| `GET` | `/accounts/:id` ✓ | FR-WAL-03 |
+| `GET` | `/accounts/:id/balance` ✓ | FR-WAL-03, FR-HIS-01 |
+| `GET` | `/accounts/:id/transactions?limit=&cursor=` ✓ | FR-HIS-02, 04 |
+| `GET` | `/accounts/:id/operations` | FR-HIS-03 |
+| `POST` | `/bank-accounts` | FR-BNK-01 |
+| `GET` | `/bank-accounts` | FR-BNK-02 |
 | `POST` | `/deposits` | FR-DEP-01 |
 | `POST` | `/transfers` | FR-TRF-01 |
 | `POST` | `/withdrawals` | FR-WDR-01 |
 | `GET` | `/operations/:id` | FR-OPS-08 |
-| `POST` | `/admin/wallets/:id/freeze`, `/unfreeze`, `/close` | FR-WAL-06, 07 |
+| `GET` | `/admin/users/:userId/accounts` ✓ | FR-WAL-04 |
+| `POST` | `/admin/accounts/:id/freeze`, `/unfreeze`, `/close` ✓ | FR-WAL-06, 07 |
 | `POST` | `/admin/bank-accounts/:id/verify` | FR-BNK-03 |
 | `POST` | `/admin/operations/:id/refunds` | FR-RFD-01 |
 | `GET` | `/admin/transfers/pending` | FR-TRF-07 |

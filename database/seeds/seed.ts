@@ -1,4 +1,6 @@
-// Usage: node database/seeds/seed.ts [seed-set]   (default: development)
+// Usage: npm run seed:dev
+//   or:  node --env-file-if-exists=.env database/seeds/seed.ts [seed-set]
+// The script reads process.env only; the flag is what loads a local .env.
 //
 // Empties every table in RESET_TABLES, then runs every
 // database/seeds/<seed-set>/NN_<table>.sql file in name order, all inside one
@@ -76,9 +78,9 @@ try {
   if (files.length === 0)
     throw new Error(`no .sql files found in ${seedDirPath}/`);
 
-  process.loadEnvFile('.env');
   const connectionString = process.env.DATABASE_URL;
-  if (!connectionString) throw new Error('DATABASE_URL is not set in .env');
+  if (!connectionString)
+    throw new Error('DATABASE_URL is not set (environment or .env)');
 
   if (process.env.ALLOW_DB_RESET !== 'true') {
     throw new Error('set ALLOW_DB_RESET=true to permit destructive seeding');

@@ -1,0 +1,47 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+language: "en-US"
+
+reviews:
+  profile: "chill"
+  request_changes_workflow: false
+  high_level_summary: true
+  poem: false
+  auto_review:
+    enabled: true
+    drafts: false
+  path_filters:
+    - "!dist/**"
+    - "!node_modules/**"
+    - "!package-lock.json"
+  path_instructions:
+    - path: "src/**/*.ts"
+      instructions: |
+        NestJS + TypeScript. Check: thin controllers (logic in services, data
+        access in repositories); explicit return types on public methods;
+        `import type` for type-only imports; no `any` and no non-null
+        assertions hiding real nulls; promises awaited or returned; input
+        validated at the boundary with class-validator DTOs; framework
+        exceptions for HTTP errors; no user input interpolated into SQL
+        strings (parameters only).
+    - path: "database/migrations/*.sql"
+      instructions: |
+        node-pg-migrate SQL migrations. The down section must undo exactly
+        what the up section did. Applied migrations are never edited. Money
+        uses NUMERIC, timestamps use TIMESTAMPTZ. Constraints get explicit
+        names. Constraint migrations contain only constraints: suggest index
+        options in comments or the PR instead of creating indexes in them.
+    - path: "database/**/*.sql"
+      instructions: |
+        PostgreSQL. Check: explicit column lists (no SELECT *); correct join
+        conditions; NULL handled with IS NULL / COALESCE, never = NULL; every
+        non-aggregated column grouped or functionally dependent on the PK; a
+        stable ORDER BY (unique tiebreaker) for any paginated query; related
+        writes in one transaction with FOR UPDATE where concurrent updates
+        are possible.
+    - path: "**/*.spec.ts"
+      instructions: |
+        Vitest. Tests should assert behavior, not implementation details;
+        no disabled or empty tests; mocks typed rather than `any`.
+
+chat:
+  auto_reply: true

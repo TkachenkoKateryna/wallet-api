@@ -6,6 +6,7 @@ import { DatabaseModule } from './database/database.module.js';
 import databaseConfig from './config/database.config.js';
 import { appConfigSchema } from './config/config.types.js';
 import { UsersModule } from './users/users.module.js';
+import { AccountsModule } from './accounts/accounts.module.js';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { UsersModule } from './users/users.module.js';
     }),
     DatabaseModule,
     UsersModule,
+    AccountsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
