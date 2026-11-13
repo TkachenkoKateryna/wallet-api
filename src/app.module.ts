@@ -7,6 +7,7 @@ import databaseConfig from './config/database.config.js';
 import { appConfigSchema } from './config/config.types.js';
 import { UsersModule } from './users/users.module.js';
 import { AccountsModule } from './accounts/accounts.module.js';
+import { LedgerModule } from './ledger/ledger.module.js';
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { AccountsModule } from './accounts/accounts.module.js';
     DatabaseModule,
     UsersModule,
     AccountsModule,
+    LedgerModule,
   ],
   controllers: [AppController],
   providers: [AppService],
