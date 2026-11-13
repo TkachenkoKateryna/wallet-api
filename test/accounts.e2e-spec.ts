@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication } from '@nestjs/common';
-import request from 'supertest';
+import request, { type Response } from 'supertest';
 import { App } from 'supertest/types.js';
 import { AppModule } from './../src/app.module.js';
 import { configureApp } from './../src/app.setup.js';
@@ -15,6 +15,15 @@ describe('Accounts (e2e)', () => {
   let accountA: string;
 
   const as = (userId: string) => ({ 'X-User-Id': userId });
+
+  // Every error carries the PRD §7 body: { statusCode, code, message }
+  const expectError =
+    (status: number, code: string) =>
+    (response: Response): void => {
+      expect(response.status).toBe(status);
+      expect(response.body).toMatchObject({ statusCode: status, code });
+      expect(typeof response.body.message).toBe('string');
+    };
 
   async function createUser(): Promise<string> {
     const response = await request(app.getHttpServer())
@@ -50,13 +59,15 @@ describe('Accounts (e2e)', () => {
 
   describe('identity', () => {
     it('requires X-User-Id', () =>
-      request(app.getHttpServer()).get('/accounts').expect(401));
+      request(app.getHttpServer())
+        .get('/accounts')
+        .expect(expectError(401, 'UNAUTHORIZED')));
 
     it('rejects an unknown user', () =>
       request(app.getHttpServer())
         .get('/accounts')
         .set(as(randomUUID()))
-        .expect(401));
+        .expect(expectError(401, 'UNAUTHORIZED')));
   });
 
   describe('opening accounts', () => {
@@ -82,21 +93,24 @@ describe('Accounts (e2e)', () => {
         .post('/accounts')
         .set(as(userA))
         .send({ currency: 'USD' })
-        .expect(409));
+        .expect(expectError(409, 'WALLET_EXISTS')));
 
-    it('rejects unsupported currencies', () =>
-      request(app.getHttpServer())
+    it('rejects unsupported currencies', async () => {
+      const response = await request(app.getHttpServer())
         .post('/accounts')
         .set(as(userA))
         .send({ currency: 'GBP' })
-        .expect(400));
+        .expect(expectError(400, 'VALIDATION_ERROR'));
+
+      expect(response.body.details).toContain(response.body.message);
+    });
 
     it('rejects unknown fields', () =>
       request(app.getHttpServer())
         .post('/accounts')
         .set(as(userA))
         .send({ currency: 'EUR', balance: '1000.00' })
-        .expect(400));
+        .expect(expectError(400, 'VALIDATION_ERROR')));
   });
 
   describe('reading accounts', () => {
@@ -135,7 +149,7 @@ describe('Accounts (e2e)', () => {
         await request(app.getHttpServer())
           .get(`/accounts/${accountA}${path}`)
           .set(as(userB))
-          .expect(404);
+          .expect(expectError(404, 'NOT_FOUND'));
       },
     );
 
@@ -147,11 +161,17 @@ describe('Accounts (e2e)', () => {
       await request(app.getHttpServer())
         .get(`/accounts/${rows[0].id}`)
         .set(as(userA))
-        .expect(404);
+        .expect(expectError(404, 'NOT_FOUND'));
       await request(app.getHttpServer())
         .post(`/admin/accounts/${rows[0].id}/freeze`)
-        .expect(404);
+        .expect(expectError(404, 'NOT_FOUND'));
     });
+
+    it('rejects a malformed account id', () =>
+      request(app.getHttpServer())
+        .get('/accounts/not-a-uuid')
+        .set(as(userA))
+        .expect(expectError(400, 'VALIDATION_ERROR')));
   });
 
   describe('statement', () => {
@@ -220,7 +240,7 @@ describe('Accounts (e2e)', () => {
         await request(app.getHttpServer())
           .get(`/accounts/${funded.id}/transactions?${query}`)
           .set(as(funded.user_id))
-          .expect(400);
+          .expect(expectError(400, 'VALIDATION_ERROR'));
       },
     );
   });
@@ -237,7 +257,7 @@ describe('Accounts (e2e)', () => {
     it('returns 404 for an unknown user', () =>
       request(app.getHttpServer())
         .get(`/admin/users/${randomUUID()}/accounts`)
-        .expect(404));
+        .expect(expectError(404, 'NOT_FOUND')));
 
     it('freezes, unfreezes and closes an account', async () => {
       const server = app.getHttpServer();
@@ -248,12 +268,15 @@ describe('Accounts (e2e)', () => {
       expect(frozen.body.status).toBe('frozen');
       await request(server)
         .post(`/admin/accounts/${accountA}/freeze`)
-        .expect(422);
+        .expect(expectError(422, 'WALLET_NOT_ACTIVE'));
 
       const active = await request(server)
         .post(`/admin/accounts/${accountA}/unfreeze`)
         .expect(200);
       expect(active.body.status).toBe('active');
+      await request(server)
+        .post(`/admin/accounts/${accountA}/unfreeze`)
+        .expect(expectError(422, 'INVALID_STATUS_TRANSITION'));
 
       const closed = await request(server)
         .post(`/admin/accounts/${accountA}/close`)
@@ -261,7 +284,7 @@ describe('Accounts (e2e)', () => {
       expect(closed.body.status).toBe('closed');
       await request(server)
         .post(`/admin/accounts/${accountA}/close`)
-        .expect(422);
+        .expect(expectError(422, 'WALLET_NOT_ACTIVE'));
     });
 
     it('refuses to close an account with money in it', async () => {
@@ -277,7 +300,7 @@ describe('Accounts (e2e)', () => {
 
       await request(app.getHttpServer())
         .post(`/admin/accounts/${rows[0].id}/close`)
-        .expect(422);
+        .expect(expectError(422, 'WALLET_NOT_EMPTY'));
     });
   });
 });

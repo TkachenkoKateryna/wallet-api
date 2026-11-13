@@ -1,11 +1,8 @@
-import {
-  ConflictException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
+import { DatabaseError } from 'pg';
+import { AppError } from '../common/errors/app-error.js';
 import { UsersRepository } from './users.repository.js';
 import { CreateUserDto } from './dto/create-user.dto.js';
-import { DatabaseError } from 'pg';
 
 @Injectable()
 export class UsersService {
@@ -20,7 +17,7 @@ export class UsersService {
         error.code === '23505' &&
         error.constraint === 'users_email_key'
       ) {
-        throw new ConflictException('Email already exists');
+        throw new AppError('EMAIL_TAKEN', 'Email already exists');
       }
 
       throw error;
@@ -35,7 +32,7 @@ export class UsersService {
     const user = await this.usersRepository.findById(id);
 
     if (!user) {
-      throw new NotFoundException('User not found');
+      throw new AppError('NOT_FOUND', 'User not found');
     }
 
     return user;
