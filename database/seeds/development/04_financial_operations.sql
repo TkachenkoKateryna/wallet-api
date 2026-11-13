@@ -1,7 +1,7 @@
 -- 28 operations covering every status. IDs: d0000000-0000-4000-8000-0000000000NN
 
-INSERT INTO financial_operations (id, type, status, idempotency_key, created_at, updated_at)
-SELECT id::UUID, type, status, idempotency_key, NOW() - make_interval(days => days_ago), NOW() - make_interval(days => days_ago)
+INSERT INTO financial_operations (id, type, status, failure_code, idempotency_key, created_at, updated_at)
+SELECT id::UUID, type, status, CASE WHEN status = 'failed' THEN 'INSUFFICIENT_FUNDS' END, idempotency_key, NOW() - make_interval(days => days_ago), NOW() - make_interval(days => days_ago)
 FROM (VALUES
     -- Initial funding: deposits from the settlement accounts
     ('d0000000-0000-4000-8000-000000000001', 'deposit',    'posted',   'seed-op-01', 60),
