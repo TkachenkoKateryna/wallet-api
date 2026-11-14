@@ -102,8 +102,8 @@ export class LedgerRepository {
     await executor.query(
       `
         INSERT INTO ledger_entries (ledger_transaction_id, account_id, amount)
-        SELECT $1::UUID, *
-        FROM unnest($2::UUID[], $3::NUMERIC[])
+        SELECT $1::UUID, e.account_id, e.amount
+        FROM unnest($2::UUID[], $3::NUMERIC[]) AS e (account_id, amount)
       `,
       [
         transactionId,

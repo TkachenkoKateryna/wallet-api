@@ -233,25 +233,25 @@ describe('PostingService (e2e)', () => {
     });
   });
 
-  it('locks in id order, whatever order callers list the accounts in', async () => {
-    const runs = Array.from({ length: 10 }, (_, i) =>
-      db.transaction(async (client) => {
-        const ids = i % 2 === 0 ? [walletA, walletB] : [walletB, walletA];
-        const locked = await posting.lockAccounts(client, ids);
-        // Hold both locks long enough for the others to queue up behind them
-        await client.query('SELECT pg_sleep(0.02)');
-
-        return locked.map((a) => a.id);
-      }),
+  it('serves concurrent callers that list accounts in opposite orders', async () => {
+    const requests = Array.from({ length: 10 }, (_, i) =>
+      i % 2 === 0 ? [walletA, walletB] : [walletB, walletA],
     );
 
-    const results = await Promise.all(runs);
+    const results = await Promise.all(
+      requests.map((ids) =>
+        db.transaction(async (client) => {
+          const locked = await posting.lockAccounts(client, ids);
+          // Hold both locks long enough for the others to queue up behind them
+          await client.query('SELECT pg_sleep(0.02)');
 
-    // Always locked, and returned, in id order
-    const sorted = [walletA, walletB].sort();
-    for (const ids of results) {
-      expect(ids).toEqual(sorted);
-    }
+          return locked.map((a) => a.id);
+        }),
+      ),
+    );
+
+    // All finish, and each gets its accounts back in the order it asked for
+    expect(results).toEqual(requests);
   });
 
   // Runs last, while this file's postings still exist. Same checks as

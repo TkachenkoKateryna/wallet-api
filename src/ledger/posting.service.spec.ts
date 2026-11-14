@@ -205,6 +205,22 @@ describe('PostingService', () => {
       ]);
     });
 
+    it('returns accounts in the order they were asked for', async () => {
+      // The repository returns rows sorted by id
+      ledger.lockAccounts.mockResolvedValue([
+        locked(WALLET),
+        locked(SETTLEMENT),
+      ]);
+
+      const [first, second] = await service.lockAccounts(client, [
+        SETTLEMENT,
+        WALLET,
+      ]);
+
+      expect(first.id).toBe(SETTLEMENT);
+      expect(second.id).toBe(WALLET);
+    });
+
     it('throws when an account is missing', async () => {
       ledger.lockAccounts.mockResolvedValue([locked(WALLET)]);
 

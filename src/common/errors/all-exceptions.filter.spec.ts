@@ -120,6 +120,7 @@ describe('AllExceptionsFilter', () => {
   });
 
   it.each([
+    ['users_email_key', 409, 'EMAIL_TAKEN'],
     ['uq_accounts_user_currency', 409, 'WALLET_EXISTS'],
     ['uq_withdrawals_provider_reference', 409, 'DUPLICATE_REFERENCE'],
   ])('maps a unique violation on %s', (constraint, status, code) => {

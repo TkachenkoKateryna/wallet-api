@@ -5,19 +5,15 @@ import {
   OnApplicationShutdown,
 } from '@nestjs/common';
 import { setTimeout as sleep } from 'node:timers/promises';
-import {
-  DatabaseError,
-  type Pool,
-  type PoolClient,
-  type QueryResult,
-  type QueryResultRow,
-} from 'pg';
+import type { Pool, PoolClient, QueryResult, QueryResultRow } from 'pg';
 
-import { AppError } from '../common/errors/app-error.js';
+import {
+  isRetryable,
+  tryAgainError,
+} from '../common/errors/postgres-errors.js';
 import { PG_POOL } from './database.constants.js';
 
 const MAX_ATTEMPTS = 3;
-const RETRYABLE_SQLSTATES = new Set(['40P01', '40001']); // deadlock, serialization failure
 const MIN_RETRY_DELAY_MS = 10;
 const MAX_RETRY_DELAY_MS = 50;
 
@@ -47,7 +43,7 @@ export class DatabaseService implements OnApplicationShutdown {
       try {
         return await this.runOnce(callback);
       } catch (err) {
-        if (!(err instanceof DatabaseError) || !isRetryable(err)) {
+        if (!isRetryable(err)) {
           throw err;
         }
 
@@ -56,7 +52,7 @@ export class DatabaseService implements OnApplicationShutdown {
         );
 
         if (attempt >= MAX_ATTEMPTS) {
-          throw new AppError('TRY_AGAIN', 'The server was busy. Try again.');
+          throw tryAgainError();
         }
 
         await sleep(
@@ -93,8 +89,4 @@ export class DatabaseService implements OnApplicationShutdown {
   async onApplicationShutdown(): Promise<void> {
     await this.pool.end();
   }
-}
-
-function isRetryable(err: DatabaseError): boolean {
-  return err.code !== undefined && RETRYABLE_SQLSTATES.has(err.code);
 }

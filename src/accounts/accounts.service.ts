@@ -1,5 +1,4 @@
 import { Injectable } from '@nestjs/common';
-import { DatabaseError } from 'pg';
 import { AppError } from '../common/errors/app-error.js';
 import { DatabaseService } from '../database/database.service.js';
 import { UsersService } from '../users/users.service.js';
@@ -27,24 +26,9 @@ export class AccountsService {
     userId: string,
     dto: CreateAccountDto,
   ): Promise<AccountResponseDto> {
-    try {
-      const row = await this.accountsRepository.create(userId, dto.currency);
+    const row = await this.accountsRepository.create(userId, dto.currency);
 
-      return AccountResponseDto.from(row);
-    } catch (error) {
-      if (
-        error instanceof DatabaseError &&
-        error.code === '23505' &&
-        error.constraint === 'uq_accounts_user_currency'
-      ) {
-        throw new AppError(
-          'WALLET_EXISTS',
-          `You already have a ${dto.currency} wallet`,
-        );
-      }
-
-      throw error;
-    }
+    return AccountResponseDto.from(row);
   }
 
   async findAllForUser(userId: string): Promise<AccountResponseDto[]> {
@@ -152,8 +136,6 @@ export class AccountsService {
       }
 
       if (!allowedFrom.includes(status)) {
-        // A frozen or closed wallet is "not active"; the only rejected move
-        // from an active wallet is unfreezing it.
         throw new AppError(
           status === 'active'
             ? 'INVALID_STATUS_TRANSITION'

@@ -79,18 +79,8 @@ describe('AccountsService', () => {
       expect(repository.create).toHaveBeenCalledWith(USER_ID, 'USD');
     });
 
-    it('maps a duplicate currency to WALLET_EXISTS', async () => {
-      repository.create.mockRejectedValue(
-        uniqueViolation('uq_accounts_user_currency'),
-      );
-
-      await expect(
-        service.create(USER_ID, { currency: 'USD' }),
-      ).rejects.toMatchObject({ code: 'WALLET_EXISTS' });
-    });
-
-    it('rethrows other database errors', async () => {
-      const error = uniqueViolation('some_other_constraint');
+    it('lets a duplicate currency through to the filter', async () => {
+      const error = uniqueViolation('uq_accounts_user_currency');
       repository.create.mockRejectedValue(error);
 
       await expect(service.create(USER_ID, { currency: 'USD' })).rejects.toBe(

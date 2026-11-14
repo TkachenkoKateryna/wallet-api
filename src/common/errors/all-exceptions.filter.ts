@@ -11,9 +11,16 @@ import type { Response } from 'express';
 import { DatabaseError } from 'pg';
 import { AppError } from './app-error.js';
 import type { ErrorCode } from './error-codes.js';
+import {
+  isRetryable,
+  tryAgainError,
+  UNIQUE_VIOLATION,
+} from './postgres-errors.js';
 
-// Unique constraints whose violation is a client error, not a bug.
+// Unique constraints whose violation is a client error, not a bug. This is
+// the only place they are mapped: services let the database error through.
 const UNIQUE_VIOLATIONS: Record<string, [ErrorCode, string]> = {
+  users_email_key: ['EMAIL_TAKEN', 'This email is already registered'],
   uq_accounts_user_currency: [
     'WALLET_EXISTS',
     'You already have a wallet in this currency',
@@ -23,9 +30,6 @@ const UNIQUE_VIOLATIONS: Record<string, [ErrorCode, string]> = {
     'This reference has already been used for another withdrawal',
   ],
 };
-
-const UNIQUE_VIOLATION = '23505';
-const TRANSIENT_SQLSTATES = new Set(['40P01', '40001']); // deadlock, serialization failure
 
 // Turns every error into the PRD §7 body: { statusCode, code, message }.
 // Raw database errors never reach the client.
@@ -83,12 +87,13 @@ export class AllExceptionsFilter implements ExceptionFilter {
       return new AppError(...unique);
     }
 
-    if (error.code && TRANSIENT_SQLSTATES.has(error.code)) {
+    // Outside db.transaction(), which retries these itself
+    if (isRetryable(error)) {
       this.logger.warn(
         `Transient database error ${error.code}: ${error.message}`,
       );
 
-      return new AppError('TRY_AGAIN', 'The server was busy. Try again.');
+      return tryAgainError();
     }
 
     return null;
@@ -111,7 +116,6 @@ export class AllExceptionsFilter implements ExceptionFilter {
       case HttpStatus.NOT_FOUND:
         return new AppError('NOT_FOUND', exception.message);
       default:
-        // Rare framework errors (e.g. 413): keep Nest's status and body.
         return exception;
     }
   }

@@ -9,21 +9,32 @@ import type { LockedAccount, PostingInput } from './ledger.types.js';
 export class PostingService {
   constructor(private readonly ledger: LedgerRepository) {}
 
+  // Locks in id order (prevents deadlocks); returns in the order of `ids`,
+  // so `const [wallet, settlement] = await lockAccounts(...)` is safe.
   async lockAccounts(
     client: Queryable,
     ids: string[],
   ): Promise<LockedAccount[]> {
-    const unique = [...new Set(ids)];
-    const accounts = await this.ledger.lockAccounts(client, unique);
+    const rows = await this.ledger.lockAccounts(client, [...new Set(ids)]);
+    const byId = new Map(rows.map((a) => [a.id, a]));
+    const missing = ids.filter((id) => !byId.has(id));
 
-    if (accounts.length !== unique.length) {
-      const found = new Set(accounts.map((a) => a.id));
-      const missing = unique.filter((id) => !found.has(id));
-
-      throw new Error(`Accounts not found: ${missing.join(', ')}`);
+    if (missing.length > 0) {
+      throw new Error(
+        `Accounts not found: ${[...new Set(missing)].join(', ')}`,
+      );
     }
 
-    return accounts;
+    return ids.map((id) => {
+      const account = byId.get(id);
+
+      // Unreachable: every id was checked above
+      if (!account) {
+        throw new Error(`Account ${id} not found`);
+      }
+
+      return account;
+    });
   }
 
   // Only reliable after lockAccounts in the same transaction
