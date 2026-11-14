@@ -56,10 +56,7 @@ export class AccountsRepository {
     return rows[0] ?? null;
   }
 
-  async findById(
-    executor: Queryable,
-    id: string,
-  ): Promise<AccountRow | null> {
+  async findById(executor: Queryable, id: string): Promise<AccountRow | null> {
     const { rows } = await executor.query<AccountRow>(
       `
         ${ACCOUNT_WITH_BALANCE}
@@ -183,12 +180,7 @@ export class AccountsRepository {
         ORDER BY s.created_at DESC, s.entry_id DESC
         LIMIT $4
       `,
-      [
-        accountId,
-        cursor?.createdAt ?? null,
-        cursor?.id ?? null,
-        limit + 1,
-      ],
+      [accountId, cursor?.createdAt ?? null, cursor?.id ?? null, limit + 1],
     );
 
     return rows;

@@ -278,6 +278,8 @@ Errors use one JSON shape:
 }
 ```
 
+`VALIDATION_ERROR` also carries `details`: every validation message, with the first one repeated in `message`. Unexpected errors return `500` with code `INTERNAL_ERROR` and a generic message; the real error is only logged.
+
 | HTTP | Code | When |
 |---|---|---|
 | 400 | `VALIDATION_ERROR` | Malformed body, ID, amount or missing idempotency key |
@@ -294,6 +296,8 @@ Errors use one JSON shape:
 | 422 | `REFUND_EXCEEDS_ORIGINAL` | Refund total above the original amount |
 | 422 | `OPERATION_NOT_REFUNDABLE` | Original is not a posted transfer or withdrawal |
 | 422 | `OPERATION_NOT_PENDING` | Approving or canceling a transfer that is not pending |
+| 422 | `INVALID_STATUS_TRANSITION` | Admin status change not allowed from the current status (unfreezing an active wallet) |
+| 422 | `WALLET_NOT_EMPTY` | Closing a wallet whose balance is not 0 |
 | 503 | `TRY_AGAIN` | Transient database conflict (deadlock, serialization failure) after internal retries |
 
 Database constraint violations must be translated to these errors. Raw database errors are never returned to clients.

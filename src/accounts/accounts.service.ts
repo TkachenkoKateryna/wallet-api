@@ -1,10 +1,5 @@
-import {
-  ConflictException,
-  Injectable,
-  NotFoundException,
-  UnprocessableEntityException,
-} from '@nestjs/common';
-import { DatabaseError } from 'pg';
+import { Injectable } from '@nestjs/common';
+import { AppError } from '../common/errors/app-error.js';
 import { DatabaseService } from '../database/database.service.js';
 import { UsersService } from '../users/users.service.js';
 import { AccountsRepository } from './accounts.repository.js';
@@ -31,23 +26,9 @@ export class AccountsService {
     userId: string,
     dto: CreateAccountDto,
   ): Promise<AccountResponseDto> {
-    try {
-      const row = await this.accountsRepository.create(userId, dto.currency);
+    const row = await this.accountsRepository.create(userId, dto.currency);
 
-      return AccountResponseDto.from(row);
-    } catch (error) {
-      if (
-        error instanceof DatabaseError &&
-        error.code === '23505' &&
-        error.constraint === 'uq_accounts_user_currency'
-      ) {
-        throw new ConflictException(
-          `User already has a ${dto.currency} account`,
-        );
-      }
-
-      throw error;
-    }
+    return AccountResponseDto.from(row);
   }
 
   async findAllForUser(userId: string): Promise<AccountResponseDto[]> {
@@ -66,7 +47,7 @@ export class AccountsService {
     const row = await this.accountsRepository.findOwned(id, userId);
 
     if (!row) {
-      throw new NotFoundException('Account not found');
+      throw new AppError('NOT_FOUND', 'Account not found');
     }
 
     return AccountResponseDto.from(row);
@@ -151,11 +132,14 @@ export class AccountsService {
       );
 
       if (!status) {
-        throw new NotFoundException('Account not found');
+        throw new AppError('NOT_FOUND', 'Account not found');
       }
 
       if (!allowedFrom.includes(status)) {
-        throw new UnprocessableEntityException(
+        throw new AppError(
+          status === 'active'
+            ? 'INVALID_STATUS_TRANSITION'
+            : 'WALLET_NOT_ACTIVE',
           `Cannot change account status from ${status} to ${to}`,
         );
       }
@@ -164,7 +148,8 @@ export class AccountsService {
         requireZeroBalance &&
         !(await this.accountsRepository.isBalanceZero(client, id))
       ) {
-        throw new UnprocessableEntityException(
+        throw new AppError(
+          'WALLET_NOT_EMPTY',
           'Account balance must be zero to close it',
         );
       }

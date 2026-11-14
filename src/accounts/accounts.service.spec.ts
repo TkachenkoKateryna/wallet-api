@@ -1,9 +1,5 @@
-import {
-  ConflictException,
-  NotFoundException,
-  UnprocessableEntityException,
-} from '@nestjs/common';
 import { DatabaseError } from 'pg';
+import { AppError } from '../common/errors/app-error.js';
 import type { DatabaseService } from '../database/database.service.js';
 import type { UsersService } from '../users/users.service.js';
 import type { AccountsRepository } from './accounts.repository.js';
@@ -83,18 +79,8 @@ describe('AccountsService', () => {
       expect(repository.create).toHaveBeenCalledWith(USER_ID, 'USD');
     });
 
-    it('maps a duplicate currency to 409', async () => {
-      repository.create.mockRejectedValue(
-        uniqueViolation('uq_accounts_user_currency'),
-      );
-
-      await expect(
-        service.create(USER_ID, { currency: 'USD' }),
-      ).rejects.toBeInstanceOf(ConflictException);
-    });
-
-    it('rethrows other database errors', async () => {
-      const error = uniqueViolation('some_other_constraint');
+    it('lets a duplicate currency through to the filter', async () => {
+      const error = uniqueViolation('uq_accounts_user_currency');
       repository.create.mockRejectedValue(error);
 
       await expect(service.create(USER_ID, { currency: 'USD' })).rejects.toBe(
@@ -109,7 +95,7 @@ describe('AccountsService', () => {
 
       await expect(
         service.findOwned(ACCOUNT_ID, USER_ID),
-      ).rejects.toBeInstanceOf(NotFoundException);
+      ).rejects.toMatchObject({ code: 'NOT_FOUND' });
     });
 
     it('does not expose internal columns', async () => {
@@ -128,11 +114,13 @@ describe('AccountsService', () => {
 
   describe('findAllForUserAsAdmin', () => {
     it('returns 404 for an unknown user', async () => {
-      usersService.findOne.mockRejectedValue(new NotFoundException());
+      usersService.findOne.mockRejectedValue(
+        new AppError('NOT_FOUND', 'User not found'),
+      );
 
       await expect(
         service.findAllForUserAsAdmin(USER_ID),
-      ).rejects.toBeInstanceOf(NotFoundException);
+      ).rejects.toMatchObject({ code: 'NOT_FOUND' });
       expect(repository.findAllByUserId).not.toHaveBeenCalled();
     });
   });
@@ -184,7 +172,7 @@ describe('AccountsService', () => {
 
       await expect(
         service.getStatement(ACCOUNT_ID, USER_ID, { limit: 2 }),
-      ).rejects.toBeInstanceOf(NotFoundException);
+      ).rejects.toMatchObject({ code: 'NOT_FOUND' });
       expect(repository.findStatement).not.toHaveBeenCalled();
     });
   });
@@ -218,35 +206,38 @@ describe('AccountsService', () => {
     });
 
     it.each([
-      ['freeze', 'frozen'],
-      ['freeze', 'closed'],
-      ['unfreeze', 'active'],
-      ['unfreeze', 'closed'],
-      ['close', 'closed'],
-    ] as const)('%s from %s is rejected with 422', async (action, from) => {
-      givenStatus(from);
+      ['freeze', 'frozen', 'WALLET_NOT_ACTIVE'],
+      ['freeze', 'closed', 'WALLET_NOT_ACTIVE'],
+      ['unfreeze', 'active', 'INVALID_STATUS_TRANSITION'],
+      ['unfreeze', 'closed', 'WALLET_NOT_ACTIVE'],
+      ['close', 'closed', 'WALLET_NOT_ACTIVE'],
+    ] as const)(
+      '%s from %s is rejected with %s',
+      async (action, from, code) => {
+        givenStatus(from);
 
-      await expect(service[action](ACCOUNT_ID)).rejects.toBeInstanceOf(
-        UnprocessableEntityException,
-      );
-      expect(repository.updateStatus).not.toHaveBeenCalled();
-    });
+        await expect(service[action](ACCOUNT_ID)).rejects.toMatchObject({
+          code,
+        });
+        expect(repository.updateStatus).not.toHaveBeenCalled();
+      },
+    );
 
-    it('returns 404 for an unknown account', async () => {
+    it('returns NOT_FOUND for an unknown account', async () => {
       givenStatus(null);
 
-      await expect(service.freeze(ACCOUNT_ID)).rejects.toBeInstanceOf(
-        NotFoundException,
-      );
+      await expect(service.freeze(ACCOUNT_ID)).rejects.toMatchObject({
+        code: 'NOT_FOUND',
+      });
     });
 
     it('refuses to close an account with a non-zero balance', async () => {
       givenStatus('active');
       repository.isBalanceZero.mockResolvedValue(false);
 
-      await expect(service.close(ACCOUNT_ID)).rejects.toBeInstanceOf(
-        UnprocessableEntityException,
-      );
+      await expect(service.close(ACCOUNT_ID)).rejects.toMatchObject({
+        code: 'WALLET_NOT_EMPTY',
+      });
       expect(repository.updateStatus).not.toHaveBeenCalled();
     });
   });

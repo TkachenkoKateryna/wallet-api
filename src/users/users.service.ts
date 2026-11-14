@@ -1,41 +1,28 @@
-import {
-  ConflictException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
+import { AppError } from '../common/errors/app-error.js';
 import { UsersRepository } from './users.repository.js';
 import { CreateUserDto } from './dto/create-user.dto.js';
-import { DatabaseError } from 'pg';
+import type { User } from './users.types.js';
 
 @Injectable()
 export class UsersService {
   constructor(private readonly usersRepository: UsersRepository) {}
 
-  async create(dto: CreateUserDto) {
-    try {
-      return await this.usersRepository.create(dto);
-    } catch (error) {
-      if (
-        error instanceof DatabaseError &&
-        error.code === '23505' &&
-        error.constraint === 'users_email_key'
-      ) {
-        throw new ConflictException('Email already exists');
-      }
-
-      throw error;
-    }
+  // A duplicate email fails on users_email_key; the global filter maps it
+  // to EMAIL_TAKEN
+  create(dto: CreateUserDto): Promise<User> {
+    return this.usersRepository.create(dto);
   }
 
-  async findAll() {
+  findAll(): Promise<User[]> {
     return this.usersRepository.findAll();
   }
 
-  async findOne(id: string) {
+  async findOne(id: string): Promise<User> {
     const user = await this.usersRepository.findById(id);
 
     if (!user) {
-      throw new NotFoundException('User not found');
+      throw new AppError('NOT_FOUND', 'User not found');
     }
 
     return user;

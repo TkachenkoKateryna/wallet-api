@@ -1,8 +1,5 @@
-import {
-  ExecutionContext,
-  NotFoundException,
-  UnauthorizedException,
-} from '@nestjs/common';
+import { ExecutionContext } from '@nestjs/common';
+import { AppError } from '../common/errors/app-error.js';
 import type { UsersService } from '../users/users.service.js';
 import { AuthenticatedRequest, UserIdGuard } from './user-id.guard.js';
 
@@ -34,19 +31,21 @@ describe('UserIdGuard', () => {
   ])('rejects a %s header with 401', async (_label, value) => {
     const { context } = contextFor(value);
 
-    await expect(guard.canActivate(context)).rejects.toBeInstanceOf(
-      UnauthorizedException,
-    );
+    await expect(guard.canActivate(context)).rejects.toMatchObject({
+      code: 'UNAUTHORIZED',
+    });
     expect(usersService.findOne).not.toHaveBeenCalled();
   });
 
   it('rejects an unknown user with 401', async () => {
-    usersService.findOne.mockRejectedValue(new NotFoundException());
+    usersService.findOne.mockRejectedValue(
+      new AppError('NOT_FOUND', 'User not found'),
+    );
     const { context } = contextFor(USER_ID);
 
-    await expect(guard.canActivate(context)).rejects.toBeInstanceOf(
-      UnauthorizedException,
-    );
+    await expect(guard.canActivate(context)).rejects.toMatchObject({
+      code: 'UNAUTHORIZED',
+    });
   });
 
   it('stores the user id on the request', async () => {
